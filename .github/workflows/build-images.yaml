@@ -1,0 +1,50 @@
+# CI pipeline: turns the TaskFlow source code in app/ into container images
+# and pushes them to YOUR Docker Hub account.
+#
+# Run it from the Actions tab -> Build TaskFlow images -> Run workflow.
+#
+# It needs two repository secrets (Settings -> Secrets and variables -> Actions):
+#   DOCKERHUB_USERNAME   your Docker Hub username
+#   DOCKERHUB_TOKEN      a Docker Hub access token with Read & Write permission
+#
+# Result:
+#   <your-username>/taskflow-api:<version>
+#   <your-username>/taskflow-frontend:<version>
+name: Build TaskFlow images
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image tag (e.g. 1.0.0)"
+        required: true
+        default: "1.0.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [api, frontend]
+    steps:
+      - name: Get the source code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push the ${{ matrix.component }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: app/${{ matrix.component }}
+          platforms: linux/amd64   # EKS t3 nodes are amd64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/taskflow-${{ matrix.component }}:${{ inputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/taskflow-${{ matrix.component }}:latest
